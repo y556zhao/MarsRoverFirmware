@@ -16,16 +16,6 @@ target_link_libraries(CANMsg
         LookupTable
         )
 
-add_library(CANAutogenWrapper STATIC)
-target_sources(CANAutogenWrapper PRIVATE src/CANAutogenWrapper.cpp)
-target_include_directories(CANAutogenWrapper PUBLIC include)
-target_link_libraries(CANAutogenWrapper
-        PRIVATE
-        uwrt-mars-rover-hw-bridge
-        LookupTable
-        )
-target_set_mbed_dependency(CANAutogenWrapper)
-
 add_library(CANBus STATIC)
 target_sources(CANBus PRIVATE src/CANBus.cpp)
 target_include_directories(CANBus PUBLIC include)
@@ -33,6 +23,5 @@ target_link_libraries(CANBus
         PRIVATE
         uwrt-mars-rover-hw-bridge
         CANMsg
-        CANAutogenWrapper
         )
 target_set_mbed_dependency(CANBus)
