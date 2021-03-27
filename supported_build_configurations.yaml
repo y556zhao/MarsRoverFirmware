@@ -41,9 +41,9 @@ test-blockingneo:
   - nucleo
 
 test-can:
-  - nucleo
   - arm
   - gimbal
+  - pdb
 #  - science
 
 test-mae3:
