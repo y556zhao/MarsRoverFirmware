@@ -44,7 +44,7 @@ test-can:
   - arm
   - gimbal
   - pdb
-#  - science
+  - science
 
 test-mae3:
   - nucleo

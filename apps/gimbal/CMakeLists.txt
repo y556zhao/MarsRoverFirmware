@@ -15,7 +15,7 @@ target_link_libraries(gimbal.${TARGET}-board.elf PRIVATE
 #Encoders
 	EncoderAEAT6012
 #CAN
-        CANBus
+        CANInterface
         CANMsg
 #Sensor
         CurrentSensor

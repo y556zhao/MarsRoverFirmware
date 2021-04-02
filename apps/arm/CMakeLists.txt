@@ -17,7 +17,7 @@ target_link_libraries(arm.${TARGET}-board.elf
         EncoderMAE3
         EncoderPololu37D
 #CAN
-        CANBus
+        CANInterface
         CANMsg
 #Sensor
         CurrentSensor

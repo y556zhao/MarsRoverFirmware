@@ -17,7 +17,7 @@ PRIVATE
         EncoderMAE3
         EncoderPololu37D
 #CAN
-        CANBus
+        CANInterface
         CANMsg
 #Sensor
         CurrentSensor
