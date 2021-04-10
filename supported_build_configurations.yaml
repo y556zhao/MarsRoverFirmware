@@ -86,3 +86,9 @@ test-pwmin:
 #  - gamepad
 #  - gimbal
 #  - science
+
+test-stress-can:
+  - arm
+  - gimbal
+  - pdb
+  - science
