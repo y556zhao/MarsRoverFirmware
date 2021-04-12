@@ -43,6 +43,7 @@ test-blockingneo:
 test-can:
   - arm
   - gimbal
+  - nucleo
   - pdb
   - science
 
@@ -90,5 +91,6 @@ test-pwmin:
 test-stress-can:
   - arm
   - gimbal
+  - nucleo
   - pdb
   - science
