@@ -83,3 +83,7 @@ test-pwmin:
 #  - gamepad
 #  - gimbal
 #  - science
+
+test-limit-switch:
+  - nucleo
+  
