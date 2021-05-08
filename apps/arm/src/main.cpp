@@ -276,158 +276,213 @@ int main() {
   }
 }
 
-// *** HANDLERS FOR CAN RX ONE-SHOTS ***
+static mbed_error_status_t setSafetyCheck(CANMsg &msg) {
+  HWBRIDGE::CONTROL::SAFETY::SafetyCheckPayload data;
+  msg.getPayload(data);
 
-static mbed_error_status_t armSetControlMode(void) {
-  bool success = true;
-  HWBRIDGE::CANSignalValue_t controlMode;
+  const Utility::LookupTable<HWBRIDGE::ARM::ActuatorID, Controller::ActuatorControllerManager *> lut = {
+      {HWBRIDGE::ARM::ActuatorID::TURNTABLE, &Turntable::manager},
+      {HWBRIDGE::ARM::ActuatorID::SHOULDER, &Shoulder::manager},
+      {HWBRIDGE::ARM::ActuatorID::ELBOW, &Elbow::manager},
+      {HWBRIDGE::ARM::ActuatorID::WRISTLEFT, &Wrist::leftManager},
+      {HWBRIDGE::ARM::ActuatorID::WRISTRIGHT, &Wrist::rightManager},
+      {HWBRIDGE::ARM::ActuatorID::CLAW, &Claw::manager}};
 
-  // Set turntable control mode
-  if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_TURNTABLE_CONTROL_MODE,
-                           controlMode)) {
-    if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Turntable::manager.getActiveControlMode()) {
-      success &= Turntable::manager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
-    }
-  } else {
-    success = false;
+  auto act = lut.at(data.actuatorID).value_or(nullptr);
+  if (!act) {
+    return MBED_ERROR_INVALID_ARGUMENT;
+  }
+  auto temp = act->getActiveController();
+
+  switch (msg.getID()) {
+    case HWBRIDGE::CANID::SET_JOINT_CURRENT_CHECK:
+      data.check ? temp->activateCurrentChecks() : temp->deactivateCurrentChecks();
+      break;
+
+    case HWBRIDGE::CANID::SET_JOINT_DEG_PER_SEC_CHECK:
+      data.check ? temp->activateDegPerSecChecks() : temp->deactivateDegPerSecChecks();
+      break;
+
+    case HWBRIDGE::CANID::SET_JOINT_LIMIT_SWITCH:
+      data.check ? temp->activateLimitSwitchChecks() : temp->deactivateLimitSwitchChecks();
+      break;
+
+    default:
+      return MBED_ERROR_INVALID_ARGUMENT;
   }
 
-  // Set shoulder control mode
-  if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_SHOULDER_CONTROL_MODE,
-                           controlMode)) {
-    if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Shoulder::manager.getActiveControlMode()) {
-      success &= Shoulder::manager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
-    }
-  } else {
-    success = false;
-  }
-
-  // Set elbow control mode
-  if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_ELBOW_CONTROL_MODE,
-                           controlMode)) {
-    if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Elbow::manager.getActiveControlMode()) {
-      success &= Elbow::manager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
-    }
-  } else {
-    success = false;
-  }
-
-  // Set left wrist control mode
-  if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_LEFT_WRIST_CONTROL_MODE,
-                           controlMode)) {
-    if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Wrist::leftManager.getActiveControlMode()) {
-      success &= Wrist::leftManager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
-    }
-  } else {
-    success = false;
-  }
-
-  // Set right wrist control mode
-  if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_RIGHT_WRIST_CONTROL_MODE,
-                           controlMode)) {
-    if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Wrist::rightManager.getActiveControlMode()) {
-      success &= Wrist::rightManager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
-    }
-  } else {
-    success = false;
-  }
-
-  // Set claw control mode
-  if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_CLAW_CONTROL_MODE,
-                           controlMode)) {
-    if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Claw::manager.getActiveControlMode()) {
-      success &= Claw::manager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
-    }
-  } else {
-    success = false;
-  }
-
-  if (success) {
-    // Send ACK message back
-    sendACK(HWBRIDGE::ARM_ACK_VALUES::ARM_ACK_ARM_SET_CONTROL_MODE_ACK);
-  }
-
-  return success ? MBED_SUCCESS : MBED_ERROR_CODE_FAILED_OPERATION;
+  return MBED_SUCCESS;
 }
 
-static mbed_error_status_t armSetJointPIDParams(void) {
-  bool success = true;
+static mbed_error_status_t setPIDParameter(CANMsg &msg) {
+  HWBRIDGE::CONTROL::PID::TuningApiPayload data;
+  msg.getPayload(data);
 
-  HWBRIDGE::CANSignalValue_t jointID;
-  HWBRIDGE::CANSignalValue_t p, i, d, deadzone;
+  const Utility::LookupTable<HWBRIDGE::ARM::ActuatorID, Controller::ActuatorControllerManager *> lut = {
+      {HWBRIDGE::ARM::ActuatorID::TURNTABLE, &Turntable::manager},
+      {HWBRIDGE::ARM::ActuatorID::SHOULDER, &Shoulder::manager},
+      {HWBRIDGE::ARM::ActuatorID::ELBOW, &Elbow::manager},
+      {HWBRIDGE::ARM::ActuatorID::WRISTLEFT, &Wrist::leftManager},
+      {HWBRIDGE::ARM::ActuatorID::WRISTRIGHT, &Wrist::rightManager},
+      {HWBRIDGE::ARM::ActuatorID::CLAW, &Claw::manager}};
 
-  // Extract signal values
-  success &=
-      can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS, HWBRIDGE::CANSIGNAL::ARM_JOINT_PIDID, jointID);
-  success &= can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS,
-                                  HWBRIDGE::CANSIGNAL::ARM_JOINT_PID_PROPORTIONAL_GAIN, p);
-  success &= can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS,
-                                  HWBRIDGE::CANSIGNAL::ARM_JOINT_PID_INTEGRAL_GAIN, i);
-  success &= can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS,
-                                  HWBRIDGE::CANSIGNAL::ARM_JOINT_PID_DERIVATIVE_GAIN, d);
-  success &= can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS,
-                                  HWBRIDGE::CANSIGNAL::ARM_JOINT_PID_DEADZONE, deadzone);
+  auto act = lut.at(data.actuatorID).value_or(nullptr);
+  if (!act) {
+    return MBED_ERROR_INVALID_ARGUMENT;
+  }
 
-  if (success) {
-    const Utility::LookupTable<HWBRIDGE::ARM_JOINT_PIDID_VALUES, Controller::ActuatorControllerManager*> lut = {
-        {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_TURNTABLE, &Turntable::manager},
-        {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_SHOULDER, &Shoulder::manager},
-        {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_ELBOW, &Elbow::manager},
-        {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_LEFT_WRIST, &Wrist::leftManager},
-        {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_RIGHT_WRIST, &Wrist::rightManager},
-        {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_CLAW, &Claw::manager}};
+  // *** HANDLERS FOR CAN RX ONE-SHOTS ***
 
-    auto act = lut.at(static_cast<HWBRIDGE::ARM_JOINT_PIDID_VALUES>(jointID)).value_or(nullptr);
-    if (!act) {
-      return MBED_ERROR_INVALID_ARGUMENT;
-    }
+  static mbed_error_status_t armSetControlMode(void) {
+    bool success = true;
+    HWBRIDGE::CANSignalValue_t controlMode;
 
-    // Set PID params
-    if (auto pid = act->getActiveController()->getPID()) {
-      pid.value().get().updateProportionalGain(p);
-      pid.value().get().updateIntegralGain(i);
-      pid.value().get().updateDerivativeGain(d);
-      pid.value().get().updateDeadzone(deadzone);
-
-      // Send ACK message back
-      sendACK(HWBRIDGE::ARM_ACK_VALUES::ARM_ACK_ARM_SET_JOINT_PID_PARAMS_ACK);
-
+    // Set turntable control mode
+    if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_TURNTABLE_CONTROL_MODE,
+                             controlMode)) {
+      if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Turntable::manager.getActiveControlMode()) {
+        success &= Turntable::manager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
+      }
     } else {
-      // PID controller doesn't exist!
       success = false;
     }
+
+    // Set shoulder control mode
+    if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_SHOULDER_CONTROL_MODE,
+                             controlMode)) {
+      if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Shoulder::manager.getActiveControlMode()) {
+        success &= Shoulder::manager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
+      }
+    } else {
+      success = false;
+    }
+
+    // Set elbow control mode
+    if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_ELBOW_CONTROL_MODE,
+                             controlMode)) {
+      if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Elbow::manager.getActiveControlMode()) {
+        success &= Elbow::manager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
+      }
+    } else {
+      success = false;
+    }
+
+    // Set left wrist control mode
+    if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_LEFT_WRIST_CONTROL_MODE,
+                             controlMode)) {
+      if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Wrist::leftManager.getActiveControlMode()) {
+        success &= Wrist::leftManager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
+      }
+    } else {
+      success = false;
+    }
+
+    // Set right wrist control mode
+    if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_RIGHT_WRIST_CONTROL_MODE,
+                             controlMode)) {
+      if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Wrist::rightManager.getActiveControlMode()) {
+        success &= Wrist::rightManager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
+      }
+    } else {
+      success = false;
+    }
+
+    // Set claw control mode
+    if (can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_CONTROL_MODE, HWBRIDGE::CANSIGNAL::ARM_CLAW_CONTROL_MODE,
+                             controlMode)) {
+      if (static_cast<HWBRIDGE::CONTROL::Mode>(controlMode) != Claw::manager.getActiveControlMode()) {
+        success &= Claw::manager.switchControlMode(static_cast<HWBRIDGE::CONTROL::Mode>(controlMode));
+      }
+    } else {
+      success = false;
+    }
+
+    if (success) {
+      // Send ACK message back
+      sendACK(HWBRIDGE::ARM_ACK_VALUES::ARM_ACK_ARM_SET_CONTROL_MODE_ACK);
+    }
+
+    return success ? MBED_SUCCESS : MBED_ERROR_CODE_FAILED_OPERATION;
   }
 
-  return success ? MBED_SUCCESS : MBED_ERROR_CODE_FAILED_OPERATION;
-}
+  static mbed_error_status_t armSetJointPIDParams(void) {
+    bool success = true;
 
-static mbed_error_status_t commonSwitchCANBus(void) {
-  bool success = true;
-  HWBRIDGE::CANSignalValue_t canBusID;
+    HWBRIDGE::CANSignalValue_t jointID;
+    HWBRIDGE::CANSignalValue_t p, i, d, deadzone;
 
-  success &=
-      can.getRXSignalValue(HWBRIDGE::CANID::COMMON_SWITCH_CAN_BUS, HWBRIDGE::CANSIGNAL::COMMON_CAN_BUS_ID, canBusID) &&
-      can.switchCANBus(static_cast<HWBRIDGE::CANBUSID>(canBusID));
+    // Extract signal values
+    success &=
+        can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS, HWBRIDGE::CANSIGNAL::ARM_JOINT_PIDID, jointID);
+    success &= can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS,
+                                    HWBRIDGE::CANSIGNAL::ARM_JOINT_PID_PROPORTIONAL_GAIN, p);
+    success &= can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS,
+                                    HWBRIDGE::CANSIGNAL::ARM_JOINT_PID_INTEGRAL_GAIN, i);
+    success &= can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS,
+                                    HWBRIDGE::CANSIGNAL::ARM_JOINT_PID_DERIVATIVE_GAIN, d);
+    success &= can.getRXSignalValue(HWBRIDGE::CANID::ARM_SET_JOINT_PID_PARAMS,
+                                    HWBRIDGE::CANSIGNAL::ARM_JOINT_PID_DEADZONE, deadzone);
 
-  if (success) {
-    // Send ACK message back
-    sendACK(HWBRIDGE::ARM_ACK_VALUES::ARM_ACK_CAN_BUS_SWITCH_ACK);
+    if (success) {
+      const Utility::LookupTable<HWBRIDGE::ARM_JOINT_PIDID_VALUES, Controller::ActuatorControllerManager *> lut = {
+          {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_TURNTABLE, &Turntable::manager},
+          {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_SHOULDER, &Shoulder::manager},
+          {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_ELBOW, &Elbow::manager},
+          {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_LEFT_WRIST, &Wrist::leftManager},
+          {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_RIGHT_WRIST, &Wrist::rightManager},
+          {HWBRIDGE::ARM_JOINT_PIDID_VALUES::ARM_JOINT_PIDID_CLAW, &Claw::manager}};
+
+      auto act = lut.at(static_cast<HWBRIDGE::ARM_JOINT_PIDID_VALUES>(jointID)).value_or(nullptr);
+      if (!act) {
+        return MBED_ERROR_INVALID_ARGUMENT;
+      }
+
+      // Set PID params
+      if (auto pid = act->getActiveController()->getPID()) {
+        pid.value().get().updateProportionalGain(p);
+        pid.value().get().updateIntegralGain(i);
+        pid.value().get().updateDerivativeGain(d);
+        pid.value().get().updateDeadzone(deadzone);
+
+        // Send ACK message back
+        sendACK(HWBRIDGE::ARM_ACK_VALUES::ARM_ACK_ARM_SET_JOINT_PID_PARAMS_ACK);
+
+      } else {
+        // PID controller doesn't exist!
+        success = false;
+      }
+    }
+
+    return success ? MBED_SUCCESS : MBED_ERROR_CODE_FAILED_OPERATION;
   }
 
-  return success ? MBED_SUCCESS : MBED_ERROR_CODE_FAILED_OPERATION;
-}
+  static mbed_error_status_t commonSwitchCANBus(void) {
+    bool success = true;
+    HWBRIDGE::CANSignalValue_t canBusID;
 
-static void sendACK(HWBRIDGE::ARM_ACK_VALUES ackValue) {
-  struct uwrt_mars_rover_can_arm_report_ack_t ackMsgStruct = {
-      .arm_ack = static_cast<uint8_t>(ackValue),
-  };
+    success &= can.getRXSignalValue(HWBRIDGE::CANID::COMMON_SWITCH_CAN_BUS, HWBRIDGE::CANSIGNAL::COMMON_CAN_BUS_ID,
+                                    canBusID) &&
+               can.switchCANBus(static_cast<HWBRIDGE::CANBUSID>(canBusID));
 
-  HWBRIDGE::CANMsgData_t ackMsgData;
-  uwrt_mars_rover_can_arm_report_ack_pack(ackMsgData.raw, &ackMsgStruct, UWRT_MARS_ROVER_CAN_ARM_REPORT_ACK_LENGTH);
+    if (success) {
+      // Send ACK message back
+      sendACK(HWBRIDGE::ARM_ACK_VALUES::ARM_ACK_CAN_BUS_SWITCH_ACK);
+    }
 
-  CANMsg msgACK;
-  msgACK.setID(HWBRIDGE::CANID::ARM_REPORT_ACK);
-  msgACK.setPayload(ackMsgData, UWRT_MARS_ROVER_CAN_ARM_REPORT_ACK_LENGTH);
+    return success ? MBED_SUCCESS : MBED_ERROR_CODE_FAILED_OPERATION;
+  }
 
-  can.sendOneShotMessage(msgACK, 1ms);
-}
+  static void sendACK(HWBRIDGE::ARM_ACK_VALUES ackValue) {
+    struct uwrt_mars_rover_can_arm_report_ack_t ackMsgStruct = {
+        .arm_ack = static_cast<uint8_t>(ackValue),
+    };
+
+    HWBRIDGE::CANMsgData_t ackMsgData;
+    uwrt_mars_rover_can_arm_report_ack_pack(ackMsgData.raw, &ackMsgStruct, UWRT_MARS_ROVER_CAN_ARM_REPORT_ACK_LENGTH);
+
+    CANMsg msgACK;
+    msgACK.setID(HWBRIDGE::CANID::ARM_REPORT_ACK);
+    msgACK.setPayload(ackMsgData, UWRT_MARS_ROVER_CAN_ARM_REPORT_ACK_LENGTH);
+
+    can.sendOneShotMessage(msgACK, 1ms);
+  }

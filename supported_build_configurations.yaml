@@ -88,6 +88,9 @@ test-pwmin:
 #  - gimbal
 #  - science
 
+test-quadrature64cpr:
+  - nucleo
+
 test-stress-can:
   - arm
   - gimbal
