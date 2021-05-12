@@ -86,10 +86,10 @@ This repository contains:
 4. Run make with the target application and board
 
     Ex. Compile the science application for the science board:  
-    `make APP=science TARGET=science`
+    `make app=science target=science`
 
     Ex. Compile the arm application for the arm board:  
-    `make APP=arm TARGET=arm`
+    `make app=arm target=arm`
     
     After compiling an application you should see a message similar to the following:  
     ```shell script
@@ -105,7 +105,7 @@ This repository contains:
     **Note:** Our makefile automatically detects the number of available execution threads and uses them all to 
     significantly speed up compile time. You can choose to use fewer threads during build with the following command:
     ```
-    UWRT_FIRMWARE_MAX_JOBS=<max number of threads> make APP=<app-name> TARGET=<target-name>
+    UWRT_FIRMWARE_MAX_JOBS=<max number of threads> make app=<app-name> target=<target-name>
     ```
     You can add the `UWRT_FIRMWARE_MAX_JOBS` to your `.bashrc` to have this max thread limit be persistent.
     ```

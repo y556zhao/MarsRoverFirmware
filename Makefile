@@ -21,24 +21,24 @@ APPS_LIST    := $(sort $(patsubst $(APPS_DIR)/%/,%, $(wildcard $(APPS_DIR)/*/)))
 NUMBER_OF_SUPPORTED_CONFIGS := $(shell python3 scripts/build_configurations_helper.py count-supported-configs)
 
 verify_app_target_tuple_is_specified:
-ifeq (,$(findstring $(TARGET), $(TARGETS_LIST)))
+ifeq (,$(findstring $(target), $(TARGETS_LIST)))
 	$(info)
-	$(info TARGET is not set or $(TARGET) is not a target within the $(TARGETS_DIR) folder)
+	$(info target is not set or $(target) is not a target within the $(TARGETS_DIR) folder)
 	$(info)
-	$(info Using TARGET=board_name, select one of the following detected board targets:)
+	$(info Using target=board_name, select one of the following detected board targets:)
 	$(foreach TARGET_NAME,$(TARGETS_LIST),$(info $(TARGET_NAME)))
 	$(error )
 endif
-ifeq (,$(findstring $(APP), $(APPS_LIST)))
-	$(info APP is not set or $(APP) is not a target within the $(APPS_DIR) folder)
+ifeq (,$(findstring $(app), $(APPS_LIST)))
+	$(info app is not set or $(app) is not a target within the $(APPS_DIR) folder)
 	$(info )
-	$(info Using APP=app_name, select one of the following detected apps:)
+	$(info Using app=app_name, select one of the following detected apps:)
 	$(foreach APP_NAME,$(APPS_LIST),$(info $(APP_NAME)))
 	$(error )
 endif
 
 verify_app_target_tuple_config: verify_app_target_tuple_is_specified
-	@python3 scripts/build_configurations_helper.py verify-config --APP=$(APP) --TARGET=$(TARGET) ; \
+	@python3 scripts/build_configurations_helper.py verify-config --APP=$(app) --TARGET=$(target) ; \
 	if [ $$? -ne 0 ]; \
 	then \
 		echo "Do you want to try to build anyways? (Y/N)"; \
@@ -50,10 +50,10 @@ verify_app_target_tuple_config: verify_app_target_tuple_is_specified
 	fi
 
 build: verify_app_target_tuple_config
-	@mkdir -p build-$(TARGET)-board
-	@cmake -S $(MAKEFILE_DIR) -B build-$(TARGET)-board -G"Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=$(MAKEFILE_DIR)/toolchain.cmake -DAPP=$(APP) -DTARGET=$(TARGET)
-	@echo Building $(APP) app for $(TARGET) board with max $(UWRT_FIRMWARE_MAX_JOBS) concurrent jobs
-	@cmake --build build-$(TARGET)-board --target $(APP).$(TARGET)-board.elf --parallel $(UWRT_FIRMWARE_MAX_JOBS)
+	@mkdir -p build-$(target)-board
+	@cmake -S $(MAKEFILE_DIR) -B build-$(target)-board -G"Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=$(MAKEFILE_DIR)/toolchain.cmake -DAPP=$(app) -DTARGET=$(target)
+	@echo Building $(app) app for $(target) board with max $(UWRT_FIRMWARE_MAX_JOBS) concurrent jobs
+	@cmake --build build-$(target)-board --target $(app).$(target)-board.elf --parallel $(UWRT_FIRMWARE_MAX_JOBS)
 
 
 
